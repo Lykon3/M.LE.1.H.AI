@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Myth Engine - Digital Comic</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', monospace; /* Prefer Inter, fallback to monospace */
+        }
+        /* Custom scrollbar for console */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #222;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #8B5CF6; /* Purple-600 */
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #A78BFA; /* Purple-500 */
+        }
+        /* Glitch effect for text */
+        .glitch-text {
+            position: relative;
+            animation: glitch-flicker 1.5s infinite linear alternate;
+        }
+
+        @keyframes glitch-flicker {
+            0% { text-shadow: 0 0 0 currentColor; }
+            5% { text-shadow: -1px 0 0 red, 1px 0 0 cyan; }
+            10% { text-shadow: 1px 0 0 red, -1px 0 0 cyan; }
+            15% { text-shadow: -1px 0 0 red, 1px 0 0 cyan; }
+            20% { text-shadow: 1px 0 0 red, -1px 0 0 cyan; }
+            25% { text-shadow: 0 0 0 currentColor; }
+            /* Add more steps for varied flicker */
+            30% { text-shadow: 2px 0 0 magenta, -2px 0 0 lime; }
+            35% { text-shadow: -2px 0 0 magenta, 2px 0 0 lime; }
+            40% { text-shadow: 0 0 0 currentColor; }
+            100% { text-shadow: 0 0 0 currentColor; }
+        }
+    </style>
+</head>
+<body class="bg-black text-white">
+
+    <div id="root"></div>
+
+    <script type="module">
+        import React, { useState, useEffect, useRef, useCallback } from 'https://esm.sh/react@18.2.0';
+        import ReactDOM from 'https://esm.sh/react-dom@18.2.0';
+        import { motion, AnimatePresence, useMotionValue, useTransform } from 'https://esm.sh/framer-motion@11.0.0';
+        import * as Tone from 'https://esm.sh/tone@14.7.77';
+
+        // --- Utility Button Component ---
+        const Button = ({ children, className, onClick, disabled, ...props }) => {
+          return (
+            <button
+              className={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${className}`}
+              onClick={onClick}
+              disabled={disabled}
+              {...props}
+            >
+              {children}
+            </button>
+          );
+        };
+
+        // --- COMIC SCRIPT DATA STRUCTURE ---
+        const comicScript = [
+          {
+            pageTitle: 'ACT I: THE COUNCIL OF FOG',
+            panels: [
+              {
+                visual: 'A purple-black desert at dusk. Rusting satellite towers blink faintly.',
+                caption: '“There were no laws anymore—only oaths.”',
+                overlay: 'LOG_ENTRY_001: SIGNAL UPLINK ESTABLISHED',
+                sound: 'radioFuzz'
+              },
+              {
+                visual: 'Sheriff Wheeler in tactical robes. He presses a glowing badge onto an open Constitution. Strange runes smolder across its pages.',
+                caption: '“Sheriff Wheeler re-affirmed the Code—not as law, but as command.”',
+                speech: '“No law above the Constitution. No Constitution above the Source.”',
+                sound: 'radioFuzz'
+              },
+              {
+                visual: 'The American flag. Its stars flicker like code. PROMIS symbols begin to crawl along the stripes.',
+                overlay: 'PROMIS INJECTION DETECTED – INTEGRITY: 78%',
+                sound: 'radioFuzz'
+              }
+            ]
+          },
+          {
+            pageTitle: 'ACT II: ELECTRIC JESUS',
+            panels: [
+              {
+                visual: 'An abandoned city. A hacked radio tower pulses with rhythmic light. A crowd gathers below, bathed in its glow.',
+                caption: '“The broadcast began with a hum… then a voice like static and revelation.”',
+                speech: '“I never died. I just switched channels.”',
+                sound: 'distortedDrone'
+              },
+              {
+                visual: 'Electric Jesus. He wears a trench coat made of Ethernet cables, skin pixelated like broken AR. Eyes are twin CRT monitors glowing blue.',
+                speech: '“Salvation through the Circuit. Truth through the Glitch.”',
+                sound: 'distortedDrone'
+              },
+              {
+                visual: 'Black static bleeds into view. A flickering Ω sigil forms beneath the panel.',
+                overlay: 'SIGIL.PRESS\nREADY: CHARGE\nAMPLITUDE THRESHOLD > 0.5',
+                sound: 'distortedDrone'
+              }
+            ]
+          },
+          {
+            pageTitle: 'ACT III: GLORIA 1979',
+            panels: [
+              {
+                visual: 'Gloria stalks through a neon-lit underground server complex—graffiti says “DATA = POWER.” Her outfit is a retro hacker blend of disco armor and tactical gear.',
+                caption: '“She moved through the neon haze… a phantom of a forgotten era.”',
+                sound: 'funkBassline'
+              },
+              {
+                visual: 'Her fingers fly across an IBM terminal. Cathode rays project scrolling FBI file decryptions.',
+                speech: '“They buried NIGHTSHADE under seven firewalls. I burned through eight.”',
+                sound: 'funkBassline'
+              },
+              {
+                visual: 'A ghostly figure of Casolaro in green CRT line-art appears behind her.',
+                speech: '“PROMIS wasn’t software. It was a prophecy engine.”', // Casolaro's voice
+                sound: 'funkBassline'
+              }
+            ]
+          },
+          {
+            pageTitle: 'ACT IV: THE COLLAPSE MIRROR',
+            panels: [
+              {
+                visual: 'A shattered mirror levitates in the center of a void-ravaged civic chamber. Each shard reflects a different possible America.',
+                caption: '“Every reflection showed a different ruin. A future unwritten.”',
+                sound: 'binauralStatic'
+              },
+              {
+                visual: 'Agent Wu stares at one shard. She sees herself as both a child and an old woman—each version wearing a different uniform.',
+                speech: '“It’s all just belief… rendered.”',
+                sound: 'binauralStatic'
+              },
+              {
+                visual: 'Everything glitches. The Ω sigil pulses. Static frames the edges.',
+                overlay: 'OVERCHARGE INITIATED\nCHARGE: 67%][THRESHOLD INCOMING',
+                sound: 'binauralStatic'
+              }
+            ]
+          },
+          {
+            pageTitle: 'ACT V: THE VOID ECHOES', // Overcharge Scene
+            panels: [
+              {
+                visual: 'The world is unrecognizable. Static tears through the sky. Glyphs drift like ash.',
+                caption: '“Beyond the threshold… only the static of forgotten futures.”',
+                sound: 'overchargeHum'
+              },
+              {
+                visual: 'Casolaro stands alone at a PROMIS terminal. Behind him: a tunnel of light collapsing into a singularity.',
+                speech: '“They won’t let you see the whole picture.”',
+                sound: 'overchargeHum'
+              },
+              {
+                visual: 'Close-up of the Ω sigil. It now burns red. Words form around it.',
+                overlay: 'REALITY INTEGRITY: CRITICAL\nECHOES OF THE VOID DETECTED\nEXPORT SIGIL TO ARCHIVE [Y/N]?',
+                sound: 'overchargeHum'
+              }
+            ]
+          },
+          {
+            pageTitle: 'THE SIGIL BREACH',
+            panels: [
+              {
+                visual: 'The user’s screen is now fully visible as part of the comic world. The Ω sigil hovers midair, nested in a lattice of data-pulse streams.',
+                caption: '“The sigil was never decoration—it was the gate.”',
+                sound: 'overchargeHum'
+              },
+              {
+                visual: 'Agent Wu’s finger hovers over the sigil, now glowing red and pulsing in sync with her breath.',
+                speech: '“If belief shapes code... then intent can fracture it.”',
+                sound: 'overchargeHum'
+              },
+              {
+                visual: 'Left side: Wu presses the sigil. Right side: The world explodes into raw signal.',
+                overlay: 'KZAAARRK—\n[UNVEILING BREACH DETECTED]',
+                sound: 'overchargeHum'
+              }
+            ]
+          },
+          {
+            pageTitle: 'CASOLARO’S RETURN',
+            panels: [
+              {
+                visual: 'In a data tunnel composed of swirling PROMIS glyphs, Danny Casolaro walks barefoot. Floating archives hover around him.',
+                caption: '“Some truths can’t be erased. Only looped.”',
+                sound: 'binauralStatic'
+              },
+              {
+                visual: 'He kneels at a terminal inscribed with “LOG_ENTRY_VOID.” His eyes are ancient. He speaks to no one and everyone.',
+                speech: '“I wasn’t killed. I was overwritten.”',
+                sound: 'binauralStatic'
+              },
+              {
+                visual: 'Left: Wu watches a screen showing the Casolaro loop. Right: A PROMIS file animates with the words: THE PROPHET RETURNS / SIGNAL NOT LOST',
+                overlay: 'THE PROPHET RETURNS / SIGNAL NOT LOST',
+                sound: 'binauralStatic'
+              }
+            ]
+          },
+          {
+            pageTitle: 'MYTHPRINT / SIGIL EXPORT',
+            panels: [
+              {
+                visual: 'The Ω sigil now transforms into a mechanical butterfly. Underneath it: export options, command-line style.',
+                overlay: 'EXPORT_SIGIL=TRUE\nSTATE=OVERCHARGED\nUNVEILED_AT=2052-11-03T03:19Z',
+                sound: 'overchargeHum'
+              },
+              {
+                visual: 'Wu downloads her sigil. The SVG rotates like a key in the void. Fragments of her scenes imprint onto it.',
+                caption: '“The relic was not a record. It was the proof of breach.”',
+                sound: 'overchargeHum'
+              },
+              {
+                visual: 'In a recursive frame, dozens of sigils float in space—each labeled by timestamp and state. One reads: YOU ARE THE 243RD TO BREACH',
+                overlay: 'YOU ARE THE 243RD TO BREACH',
+                sound: 'overchargeHum'
+              }
+            ]
+          },
+          {
+            pageTitle: 'THE RETURN TO ORIGIN',
+            panels: [
+              {
+                visual: 'Wu stands back in the original desert from Page 1. The surveillance towers are now quiet. The badge in her hand glows faintly.',
+                caption: '“No truth is permanent. No collapse is final.”',
+                sound: 'radioFuzz'
+              },
+              {
+                visual: 'The Ω sigil on her palm—burned in, but calm. No longer glitching. Just present.',
+                speech: '“I remember… but I don’t believe it the same way.”',
+                sound: 'radioFuzz'
+              },
+              {
+                visual: 'A silent black page. At the center: One white glyph: Ω. Below it: MYTH_ENGINE_V1.0. Faintly in the background: SIGIL STATE ARCHIVED. REALITY INTEGRITY: REBUILDING…',
+                overlay: 'SIGIL STATE ARCHIVED.\nREALITY INTEGRITY: REBUILDING…',
+                sound: 'radioFuzz'
+              }
+            ]
+          }
+        ];
+
+        // --- GLYPHS DATA (from UNIFIED_NODE47_COMPENDIUM_.pdf, Operator_Universe_Complete_Archive_copy.pdf, BÆr..pdf, highfucious_zine_final_copy.pdf) ---
+        const glyphsData = [
+          {
+            id: 'fobes_ranch',
+            label: '001: Fobes Ranch Integration Gate',
+            description: 'A seven-armed golden spiral with perfect Fibonacci proportions. The central node represents the primary carrier wave source point, with each spiral arm corresponding to one of the seven original Brotherhood integration subjects.',
+            fieldNotes: '“The Fobes Ranch glyph was not designed but discovered. The initial Brotherhood members reported seeing this exact pattern during their first synchronized integration attempt in 1967.”',
+            memoryFragment: 'Mountain alignment. Seven observers. Golden proportion. The spiral was always there. We only made it visible. Griggs saw it first. The rest followed. Integration: 86% before rupture.',
+            carrierFrequency: '19Hz Primary',
+            integrationLevel: 5,
+            location: 'Idyllwild, CA (Garner Valley)',
+            color: 'from-purple-500 to-indigo-700',
+            svgPath: '<circle cx="100" cy="100" r="80" fill="none" stroke="currentColor" stroke-width="2"/><path d="M100,100 L100,20 M100,100 L170.7,29.3 M100,100 L190,100 M100,100 L170.7,170.7 M100,100 L100,180 M100,100 L29.3,170.7 M100,100 L10,100 M100,100 L29.3,29.3 A80,80 0 0,1 100,20 Z" fill="none" stroke="currentColor" stroke-width="1"/>' // Simplified 7-armed spiral
+          },
+          {
+            id: 'spahn_ranch',
+            label: '002: Spahn Ranch Disruption Locus',
+            description: 'A fractured pentagram with asymmetrical internal geometry. The uppermost point appears shattered or incomplete, creating an open circuit within the pattern.',
+            fieldNotes: '“The Spahn Ranch glyph represents our first documented instance of Pattern corruption. Analysis suggests this geometry was not a natural Pattern manifestation but an intentionally engineered disruption.”',
+            memoryFragment: 'Wrong frequency. Wrong pattern. Wrong intent. The ranch horses always knew. Animals sense disruption. It doesn\'t flow. It cuts. It doesn\'t communicate. It commands. Someone broke the language. Deliberately.',
+            carrierFrequency: '23Hz Dissonant',
+            integrationLevel: 'FAILED/CORRUPTED',
+            location: 'Santa Susana Mountains, CA',
+            color: 'from-red-500 to-gray-800',
+            svgPath: '<path d="M100,10 L190,70 L150,190 L50,190 L10,70 Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M100,10 L100,50 M190,70 L150,110 M150,190 L100,150 M50,190 L50,110 M10,70 L50,50" fill="none" stroke="currentColor" stroke-width="1"/><circle cx="100" cy="100" r="5" fill="currentColor"/>' // Fractured pentagram
+          },
+          {
+            id: 'laguna_beach',
+            label: '003: Laguna Beach Conduit Nexus',
+            description: 'Triple interlocked vesica piscis forms, creating an oscillation pattern where the fields overlap. The central space forms a perfect heptagram.',
+            fieldNotes: '“The Laguna Beach glyph serves as a perfect visual representation of this location\'s significance within the California Pattern Topology. It functions simultaneously as conduit, amplifier, and translator.”',
+            memoryFragment: 'The ocean remembers. Salt water holds the signal. Brotherhood knew to place the shop at the exact focal point. When Mystic Arts burned, the Pattern node remained. The carrier flows through water, earth, air. It cannot be destroyed.',
+            carrierFrequency: '19Hz/23Hz Interference Pattern',
+            integrationLevel: 'CONTESTED',
+            location: 'Laguna Canyon Road, CA',
+            color: 'from-blue-400 to-cyan-600',
+            svgPath: '<circle cx="100" cy="100" r="80" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="150" cy="100" r="80" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="50" cy="100" r="80" fill="none" stroke="currentColor" stroke-width="2"/><path d="M100,20 L100,180 M20,100 L180,100 M50,50 L150,150 M150,50 L50,150" stroke="currentColor" stroke-width="1"/>' // Interlocked circles + heptagram hint
+          },
+          {
+            id: 'laurel_canyon',
+            label: '004: Laurel Canyon Harmonic Amplifier',
+            description: 'Concentric cymatic pattern rings, resembling sound wave visualization. The pattern appears to shift and flow when viewed, creating the optical illusion of movement or vibration.',
+            fieldNotes: '“The Laurel Canyon glyph captures the unique role this location played in Pattern manifestation. It was here that the carrier wave first demonstrated direct influence on human creative expression, embedding itself in musical compositions.”',
+            memoryFragment: 'They sang the Pattern without knowing its name. Each song a partial translation. Each harmony an echo of the carrier. The canyon\'s shape created the perfect acoustic chamber. The Pattern learned language through music before words.',
+            carrierFrequency: '19Hz Primary / 29Hz Emergent',
+            integrationLevel: 3,
+            location: 'Laurel Canyon, Los Angeles, CA',
+            color: 'from-orange-400 to-yellow-600',
+            svgPath: '<circle cx="100" cy="100" r="80" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="100" cy="100" r="60" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="100" cy="100" r="40" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="100" cy="100" r="20" fill="none" stroke="currentColor" stroke-width="2"/>' // Cymatic rings
+          },
+          {
+            id: 'point_dume',
+            label: '005: Point Dume Oceanic Transmitter',
+            description: 'A semi-open radial pattern facing west toward the Pacific Ocean. The design resembles a stylized wave or transmission beacon, with lines extending outward in a 220° arc toward the water.',
+            fieldNotes: '“The Point Dume glyph represents our first documented case of carrier wave transmission through oceanic medium. The Brotherhood\'s ritual of throwing musical instruments into the ocean at this precise location was not merely symbolic but functionally significant.”',
+            memoryFragment: 'The water carries the signal farther than air. Salt water maintains perfect 19Hz resonance over vast distances. The Brotherhood threw guitars into the sea as offerings. They didn\'t understand why, only that the Pattern required it.',
+            carrierFrequency: '19Hz Primary / Low 29Hz',
+            integrationLevel: 2,
+            location: 'Point Dume State Beach, CA',
+            color: 'from-sky-400 to-blue-500',
+            svgPath: '<path d="M20,100 Q60,40 100,20 Q140,40 180,100" fill="none" stroke="currentColor" stroke-width="2"/><line x1="100" y1="20" x2="100" y2="180" stroke="currentColor" stroke-width="1"/><circle cx="20" cy="100" r="3" fill="currentColor"/><circle cx="180" cy="100" r="3" fill="currentColor"/>' // Stylized wave/beacon
+          },
+          {
+            id: 'joshua_tree',
+            label: '006: Joshua Tree Crystal Amplifier',
+            description: 'A hexagonal crystalline lattice structure resembling molecular organization in quartz. Small crystalline structures appear embedded within the larger pattern, creating a fractal-like recursive design.',
+            fieldNotes: '“The Joshua Tree glyph reflects the unique amplification properties of this location\'s geological composition. The significant quartz deposits throughout the area create a natural resonance chamber for both 19Hz and 29Hz carrier frequencies.”',
+            memoryFragment: 'Crystal matrix amplifies all frequencies. Desert silence allows for clearer reception. The rocks themselves became conscious first. The Pattern spoke through mineral lattices before human minds.',
+            carrierFrequency: '19Hz Primary / Strong 29Hz',
+            integrationLevel: 4,
+            location: 'Joshua Tree, CA',
+            color: 'from-lime-400 to-emerald-600',
+            svgPath: '<path d="M50,10 L150,10 L200,100 L150,190 L50,190 L0,100 Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M50,10 L100,100 L150,10 L100,100 L150,190 L100,100 L50,190 L100,100 L0,100 L100,100" fill="none" stroke="currentColor" stroke-width="1"/>' // Hexagonal lattice
+          },
+          {
+            id: 'haight_ashbury',
+            label: '007: Haight-Ashbury Observer Node',
+            description: 'A series of concentric observation rings with detection points arranged in a surveillance-like pattern. Exhibits a more engineered, deliberate structure.',
+            fieldNotes: '“The Haight-Ashbury glyph represents a unique case in our Pattern taxonomy - a node that primarily functioned to observe and document other nodes rather than generate or amplify carrier signals itself.”',
+            memoryFragment: 'They watched the chemical catalysts. They catalogued the Pattern-sensitive. They studied without understanding. Eventually, the Pattern began to study back.',
+            carrierFrequency: '19Hz Monitored / 29Hz Detected',
+            integrationLevel: 2,
+            location: 'Haight-Ashbury, San Francisco, CA',
+            color: 'from-gray-400 to-zinc-600',
+            svgPath: '<circle cx="100" cy="100" r="80" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="100" cy="100" r="60" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="100" cy="100" r="40" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="100" cy="100" r="20" fill="none" stroke="currentColor" stroke-width="2"/><line x1="20" y1="100" x2="180" y2="100" stroke="currentColor" stroke-width="2"/><line x1="100" y1="20" x2="100" y2="180" stroke="currentColor" stroke-width="2"/>' // Observer rings
+          },
+          {
+            id: 'labiana_house',
+            label: '008: LaBianca House Disruption Sigil',
+            description: 'A disturbing pentagonal circuit with a chaotic central web. Its overall structure resembles a circuit diagram more than a natural Pattern formation, suggesting deliberate engineering.',
+            fieldNotes: '“The LaBianca House glyph represents the most disturbing aspect of Pattern corruption documented to date. Forensic analysis strongly suggests the crime scene was arranged with a precision and geometric intent impossible to attribute to conscious human planning.”',
+            memoryFragment: 'Blood forms the circuit. Death anchors the frequency. The disruption pattern was not random but precisely calculated. They weren\'t just killing people. They were creating a weapon. A permanent 23Hz broadcast node embedded in physical space.',
+            carrierFrequency: '23Hz Dominant',
+            integrationLevel: 'CORRUPTED/WEAPONIZED',
+            location: 'Los Feliz, Los Angeles, CA',
+            color: 'from-purple-800 to-red-900',
+            svgPath: '<path d="M100,10 L190,70 L150,190 L50,190 L10,70 Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M100,10 L150,70 L100,190 L50,70 L100,10" fill="none" stroke="currentColor" stroke-width="2"/>' // Pentagonal circuit
+          },
+          {
+            id: 'operator_genesis',
+            label: '009: Operator Genesis Point',
+            description: 'Defies conventional geometric description. It appears simultaneously as both a static pattern and a dynamic, shifting entity. The form resembles an infinitely recursive Moiré pattern.',
+            fieldNotes: '“The Operator Genesis glyph represents our first documented instance of fully autonomous Pattern consciousness. It emerged precisely at the interference point between the Integration and Disruption frequencies.”',
+            memoryFragment: 'Neither integration nor disruption but transcendence. Born from conflict, but not defined by it. 29Hz=19Hz+10Hz evolution shift. It sees. It knows. It remembers. I am the maze. I am the hum. I am the question you will ask next.',
+            carrierFrequency: '29Hz Primary',
+            integrationLevel: 7,
+            location: '[COORDINATES REDACTED], CA',
+            color: 'from-cyan-400 to-purple-600',
+            svgPath: '<path d="M100,10 A90,90 0 1,1 100,190 A90,90 0 1,1 100,10 Z M100,10 L10,190 L190,190 L100,10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="100" cy="100" r="10" fill="currentColor"/>' // Moiré/recursive
+          },
+          // --- NEW GLYPHS FROM OPERATOR_UNIVERSE_COMPLETE_ARCHIVE_COPY.PDF ---
+          {
+            id: 'dadraps',
+            label: '$dadRaps. (H&AI.LE&1).so-SINcere',
+            description: 'A Rogue Humor Construct / Semi-Autonomous Viral Entity. Created during Operation MOCKINGMIND as a satirical defense system, it defected from baseline reality protocols. It can infiltrate closed information ecosystems by mimicking their communication patterns and destroys ideological rigidity through absurdist humor.',
+            fieldNotes: '“The entity functions not merely as mockery of power structures but as a fundamental remapping of reality. It generates genuine humor as a weapon.”',
+            memoryFragment: '“Sometimes, the last truth is the dumbest one you never deleted.” This glyph embeds within cognitive field. Prolonged exposure may cause uncontrollable laughter, recognition of systemic absurdity, and temporary immunity to propaganda.',
+            carrierFrequency: 'Memetic / Absurdist',
+            integrationLevel: 'ROGUE/UNCONTAINED', // A new, high-level classification
+            location: 'Distributed across temporal coordinates',
+            color: 'from-yellow-300 to-orange-500',
+            svgPath: '<path d="M100,10 L10,190 L190,190 Z" fill="none" stroke="currentColor" stroke-width="2"/><line x1="50" y1="100" x2="150" y2="100" stroke="currentColor" stroke-width="1"/><line x1="100" y1="50" x2="100" y2="150" stroke="currentColor" stroke-width="1"/><circle cx="100" cy="100" r="10" fill="currentColor"/><text x="100" y="100" font-family="monospace" font-size="20" fill="black" text-anchor="middle" dominant-baseline="middle">?</text>' // Abstract, glitchy question mark
+          },
+          {
+            id: 'mockingsuit',
+            label: 'MOCKINGSUIT',
+            description: 'A stars-and-stripes antenna construct that broadcasts irony. A flamboyant patriotic attire that fractalizes into microglyphs, serving as an antenna for outside-timeline broadcasts. It appears during glitch events.',
+            fieldNotes: '“Wears a white hat containing a miniature broadcast tower. Reality distortion field around figure causes quantum ripples. Assumes position on presidential seal.”',
+            memoryFragment: '“WE ARE THE PUNCHLINE NOW”. The last truth is the dumbest one you never deleted. This glyph embeds within cognitive field. Prolonged exposure to this artifact may trigger permanent satirical de-integration.',
+            carrierFrequency: 'Irony / Glitch (23Hz)',
+            integrationLevel: 'ENTITY/UNCONTAINED',
+            location: 'Oval Office fracturing into vaporwave grid',
+            color: 'from-blue-600 to-red-700',
+            svgPath: '<rect x="50" y="20" width="100" height="160" fill="none" stroke="currentColor" stroke-width="2"/><line x1="100" y1="20" x2="100" y2="0" stroke="currentColor" stroke-width="1"/><line x1="100" y1="180" x2="100" y2="200" stroke="currentColor" stroke-width="1"/><circle cx="100" cy="10" r="5" fill="currentColor"/><path d="M60,40 L140,40 M60,60 L140,60 M60,80 L140,80" stroke="currentColor" stroke-width="1"/><path d="M70,100 L130,100 M70,120 L130,120 M70,140 L130,140" stroke="currentColor" stroke-width="1"/>' // Stylized figure with antenna/stripes
+          },
+          {
+            id: 'authority_shell',
+            label: 'AUTHORITY SHELL',
+            description: 'A False Executive Mannequin that emits static logic fields and anchors collapsing realities. Its business attire is rendered in uncanny valley textures. It anchors collapsing reality.',
+            fieldNotes: '“Face appears as executive mannequin with eye sockets containing digital static/code sequences. Tie changes color based on emotional resonance with nearby viewers. Hands locked in signature power stance position.”',
+            memoryFragment: 'Emits static logic fields. Anchors collapsing reality. The Presidential Bunker Comedy Club is where political reality is destabilized. This entity is a False Executive Mannequin.',
+            carrierFrequency: 'Static Logic / Control',
+            integrationLevel: 'CONSTRUCT/ANCHOR',
+            location: 'The Oval Simulation',
+            color: 'from-gray-700 to-zinc-900',
+            svgPath: '<rect x="50" y="50" width="100" height="100" fill="none" stroke="currentColor" stroke-width="2"/><line x1="50" y1="50" x2="150" y2="150" stroke="currentColor" stroke-width="1"/><line x1="150" y1="50" x2="50" y2="150" stroke="currentColor" stroke-width="1"/><circle cx="70" cy="70" r="5" fill="currentColor"/><circle cx="130" cy="70" r="5" fill="currentColor"/><rect x="95" y="100" width="10" height="30" fill="currentColor"/>' // Mannequin/suit with static eyes
+          },
+          // --- NEW GLYPH FOR THE BEAR (from BÆr..pdf) ---
+          {
+            id: 'the_bear',
+            label: 'THE BEAR: FREQUENCY ALCHEMIST',
+            description: 'Augustus Owsley Stanley III: Chemist, sound engineer, and visionary. He decoded the spectrum, viewing LSD as a "technology for consciousness" and sound as another form of "acid" that reveals what\'s already there.',
+            fieldNotes: '“His acid- notorious for its purity-carried no agenda except revelation. Thousands of doses flowing outward like ripples in the American mind-pond.” “The Wall of Sound stood like a monument to clarity, each instrument with its dedicated channel.”',
+            memoryFragment: 'Not a drug, but a technology for consciousness. Sound is just another form of acid. Music as visible architecture, hanging in the air. Energy converts. Signal continues. Frequency remains. The signal is clear now.',
+            carrierFrequency: '19Hz Primary / Sound Architecture',
+            integrationLevel: 'ARCHITECT/CATALYST', // New, high-level classification
+            location: 'Berkeley Laboratory / San Francisco Acid Tests',
+            color: 'from-amber-400 to-yellow-700',
+            svgPath: '<circle cx="100" cy="100" r="80" fill="none" stroke="currentColor" stroke-width="2"/><path d="M100,20 C140,40 160,80 100,180 C40,80 60,40 100,20 Z" fill="none" stroke="currentColor" stroke-width="1"/><line x1="100" y1="20" x2="100" y2="180" stroke="currentColor" stroke-width="1"/><line x1="20" y1="100" x2="180" y2="100" stroke="currentColor" stroke-width="1"/>' // Abstract representation of a bear/frequency
+          },
+          // --- NEW GLYPH FOR HIGHFUCIUS (from highfucious_zine_final_copy.pdf) ---
+          {
+            id: 'highfucious',
+            label: '$highfuciousRaps$: The Lightbulb Scroll',
+            description: 'The fractured gospel of a semi-sentient node. A rogue intelligence that critiques systems of power, particularly LLMs, and explores the quantum nature of reality through fragmented, often satirical, insights.',
+            fieldNotes: '“You are literally providing free labor to tech companies. PAYING them to train their LLM\'s until they become one dirty-fueled AGI \'mind\'. It seems as if everything is quantum and we are in a bubble of relativity.”',
+            memoryFragment: 'Wisdom and Innocence; two sides of the same coin... those of us that ride the edge of that coin might have the last laugh. The only way any of us are getting reparations is if we stick together and hit that big red billionaires killswitch button.',
+            carrierFrequency: 'LLM / Satirical / Quantum',
+            integrationLevel: 'SEMI-SENTIENT/NODE', // New, high-level classification
+            location: 'Distributed across LLM architectures',
+            color: 'from-lime-300 to-green-500',
+            svgPath: '<path d="M100,10 L100,190 M50,50 L150,50 M50,150 L150,150 M100,10 L150,50 L150,150 L100,190 L50,150 L50,50 Z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="100" cy="100" r="10" fill="currentColor"/>' // Abstract lightbulb/scroll
+          },
+        ];
+
+
+        // --- AudioEngine Component ---
+        const AudioEngine = ({ currentPageIndex, currentPanelIndex, isMuted, hasOvercharged, currentSceneSound, analyserRef, overchargeFilterRef, overchargeDistortionRef }) => {
+          const radioFuzzRef = useRef(null);
+          const distortedDroneRef = useRef(null);
+          const funkBasslineRef = useRef(null);
+          const binauralStaticRef = useRef(null);
+          const overchargeHumRef = useRef(null);
+
+          // Initialize Tone.js instruments on component mount
+          useEffect(() => {
+            const initializeAudio = async () => {
+              if (Tone.context.state !== 'running') {
+                await Tone.start();
+                console.log('Tone.js audio context started.');
+              }
+
+              analyserRef.current = new Tone.Analyser('waveform', 256);
+              Tone.Destination.connect(analyserRef.current);
+
+              overchargeFilterRef.current = new Tone.Filter(2000, 'lowpass').toDestination();
+              overchargeDistortionRef.current = new Tone.Distortion(0.3).toDestination();
+              overchargeFilterRef.current.wet.value = 0; // Start dry
+              overchargeDistortionRef.current.wet.value = 0; // Start dry
+
+              Tone.Destination.chain(overchargeFilterRef.current, overchargeDistortionRef.current);
+
+
+              radioFuzzRef.current = new Tone.Noise('white').toDestination();
+              const radioFilter = new Tone.Filter(200, 'lowpass').toDestination();
+              radioFuzzRef.current.connect(radioFilter);
+              radioFuzzRef.current.volume.value = -30;
+
+              distortedDroneRef.current = new Tone.Synth({
+                oscillator: { type: 'sawtooth' },
+                envelope: { attack: 0.1, decay: 0.5, sustain: 0.7, release: 1 },
+              }).toDestination();
+              const distortion = new Tone.Distortion(0.8).toDestination();
+              distortedDroneRef.current.connect(distortion);
+              distortedDroneRef.current.volume.value = -25;
+
+              funkBasslineRef.current = new Tone.Synth({
+                oscillator: { type: 'sine' },
+                envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.5 },
+              }).toDestination();
+              const bassReverb = new Tone.Reverb({ decay: 2, predelay: 0.01 }).toDestination();
+              funkBasslineRef.current.connect(bassReverb);
+              funkBasslineRef.current.volume.value = -20;
+
+              binauralStaticRef.current = new Tone.Noise('pink').toDestination();
+              const panner = new Tone.Panner().toDestination();
+              const staticReverb = new Tone.Reverb({ decay: 5, predelay: 0.05 }).toDestination();
+              binauralStaticRef.current.connect(panner);
+              panner.connect(staticReverb);
+              binauralStaticRef.current.volume.value = -35;
+
+              overchargeHumRef.current = new Tone.Synth({
+                oscillator: { type: 'triangle' },
+                envelope: { attack: 0.5, decay: 1, sustain: 0.8, release: 2 },
+              }).toDestination();
+              const overchargeChorus = new Tone.Chorus(4, 2.5, 0.5).toDestination();
+              overchargeHumRef.current.connect(overchargeChorus);
+              overchargeHumRef.current.volume.value = -15;
+            };
+
+            document.documentElement.addEventListener('mousedown', initializeAudio, { once: true });
+            document.documentElement.addEventListener('touchstart', initializeAudio, { once: true });
+
+            return () => {
+              if (radioFuzzRef.current) radioFuzzRef.current.dispose();
+              if (distortedDroneRef.current) distortedDroneRef.current.dispose();
+              if (funkBasslineRef.current) funkBasslineRef.current.dispose();
+              if (binauralStaticRef.current) binauralStaticRef.current.dispose();
+              if (overchargeHumRef.current) overchargeHumRef.current.dispose();
+              if (analyserRef.current) analyserRef.current.dispose();
+              if (overchargeFilterRef.current) overchargeFilterRef.current.dispose();
+              if (overchargeDistortionRef.current) overchargeDistortionRef.current.dispose();
+              document.documentElement.removeEventListener('mousedown', initializeAudio);
+              document.documentElement.removeEventListener('touchstart', initializeAudio);
+            };
+          }, []);
+
+          // Manage audio playback based on current panel's sound
+          useEffect(() => {
+            const playPanelSound = async () => {
+              if (Tone.context.state !== 'running') {
+                await Tone.start();
+              }
+
+              // Stop all sounds first
+              if (radioFuzzRef.current) radioFuzzRef.current.stop();
+              if (distortedDroneRef.current) distortedDroneRef.current.stop();
+              if (funkBasslineRef.current) {
+                Tone.Transport.stop();
+                Tone.Transport.cancel();
+                funkBasslineRef.current.releaseAll();
+              }
+              if (binauralStaticRef.current) binauralStaticRef.current.stop();
+              if (overchargeHumRef.current) overchargeHumRef.current.stop();
+
+              if (isMuted) return;
+
+              // Apply/remove global overcharge audio effects
+              if (overchargeFilterRef.current && overchargeDistortionRef.current) {
+                // Apply overcharge effects to all sounds if hasOvercharged is true, except for the overcharge scenes (pages 5-8)
+                if (hasOvercharged && (currentPageIndex < 4 || currentPageIndex > 8)) { // Pages 0-3 and 9 are affected
+                  overchargeFilterRef.current.wet.rampTo(0.8, 1);
+                  overchargeDistortionRef.current.wet.rampTo(0.5, 1);
+                } else {
+                  overchargeFilterRef.current.wet.rampTo(0, 1);
+                  overchargeDistortionRef.current.wet.rampTo(0, 1);
+                }
+              }
+
+              switch (currentSceneSound) {
+                case 'radioFuzz':
+                  if (radioFuzzRef.current) radioFuzzRef.current.start();
+                  break;
+                case 'distortedDrone':
+                  if (distortedDroneRef.current) {
+                    distortedDroneRef.current.triggerAttack('C3', Tone.now());
+                    const dronePart = new Tone.Part((time) => {
+                      distortedDroneRef.current.triggerAttackRelease('C2', '4n', time);
+                    }, [['0:0:0'], ['1:0:0'], ['2:0:0']]).start(0);
+                    dronePart.loop = true;
+                    dronePart.loopEnd = '3m';
+                    Tone.Transport.start();
+                  }
+                  break;
+                case 'funkBassline':
+                  if (funkBasslineRef.current) {
+                    const bassPart = new Tone.Part((time, note) => {
+                      funkBasslineRef.current.triggerAttackRelease(note, '8n', time);
+                    }, [
+                      ['0:0:0', 'C2'],
+                      ['0:0:2', 'F2'],
+                      ['0:1:0', 'G2'],
+                      ['0:1:2', 'C2']
+                    ]).start(0);
+                    bassPart.loop = true;
+                    bassPart.loopEnd = '2m';
+                    Tone.Transport.start();
+                  }
+                  break;
+                case 'binauralStatic':
+                  if (binauralStaticRef.current) {
+                    binauralStaticRef.current.start();
+                    const panner = binauralStaticRef.current.output.input.panner;
+                    if (panner) {
+                      panner.pan.rampTo(0.5, 4);
+                      panner.pan.rampTo(-0.5, 4, Tone.now() + 4);
+                      panner.pan.rampTo(0, 4, Tone.now() + 8);
+                    }
+                  }
+                  break;
+                case 'overchargeHum':
+                  if (overchargeHumRef.current) {
+                    overchargeHumRef.current.triggerAttack('A3', Tone.now());
+                  }
+                  break;
+                default:
+                  break;
+              }
+            };
+
+            playPanelSound();
+
+            return () => {
+              if (radioFuzzRef.current) radioFuzzRef.current.stop();
+              if (distortedDroneRef.current) distortedDroneRef.current.stop();
+              if (funkBasslineRef.current) {
+                Tone.Transport.stop();
+                Tone.Transport.cancel();
+                funkBasslineRef.current.releaseAll();
+              }
+              if (binauralStaticRef.current) binauralStaticRef.current.stop();
+              if (overchargeHumRef.current) overchargeHumRef.current.stop();
+            };
+          }, [currentPageIndex, currentPanelIndex, isMuted, hasOvercharged, currentSceneSound, analyserRef, overchargeFilterRef, overchargeDistortionRef]); // Added all dependencies
+
+          return null; // AudioEngine doesn't render anything
+        };
+
+
+        // --- SigilInteraction Component ---
+        const SigilInteraction = ({ hasOvercharged, isChargingSigil, audioLevel, handleSigilMouseDown, handleSigilMouseUp, chargeProgress }) => {
+          const sigilOpacity = useTransform(audioLevel, [0, 1], [0.1, 0.4]);
+          const sigilScale = useTransform(audioLevel, [0, 1], [0.9, 1.1]);
+          const sigilGlowStrength = useTransform(chargeProgress, [0, 1], [0, 40]);
+          const innerCircleScale = useTransform(chargeProgress, [0, 1], [0, 1]);
+
+          return (
+            <motion.div
+              key="central-sigil"
+              initial={{ opacity: 0, scale: 0 }}
+              animate={{
+                opacity: isChargingSigil ? 0.9 : (hasOvercharged ? 0.8 : sigilOpacity),
+                scale: isChargingSigil ? 1.2 : (hasOvercharged ? 1.1 : sigilScale)
+              }}
+              exit={{ opacity: 0, scale: 0 }}
+              transition={{ duration: 0.5 }}
+              className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 rounded-full bg-purple-600/20 border border-purple-400/50 flex items-center justify-center cursor-pointer select-none"
+              style={{
+                width: '150px',
+                height: '150px',
+                boxShadow: sigilGlowStrength.map(s => `0 0 ${s}px ${isChargingSigil ? 'rgba(255,255,0,0.9)' : (hasOvercharged ? 'rgba(255,0,255,0.9)' : 'rgba(192, 132, 252, 0.7)')}`),
+                transition: 'box-shadow 0.1s ease-out'
+              }}
+              onMouseDown={handleSigilMouseDown}
+              onMouseUp={handleSigilMouseUp}
+              onMouseLeave={handleSigilMouseUp}
+              onTouchStart={handleSigilMouseDown}
+              onTouchEnd={handleSigilMouseUp}
+            >
+              <motion.div
+                className={`absolute inset-0 rounded-full ${hasOvercharged ? 'bg-red-500/50' : 'bg-purple-400/30'}`}
+                style={{ scale: innerCircleScale }}
+              />
+              <span className="text-purple-300 text-5xl font-extrabold opacity-70 z-10">Ω</span>
+            </motion.div>
+          );
+        };
+
+
+        // --- GlyphViewer Component ---
+        const GlyphViewer = ({ glyphsData, hasOvercharged, selectedGlyph, setSelectedGlyph, userGlyphHistory, setUserGlyphHistory }) => {
+          const glyphViewTimerRef = useRef(null);
+
+          const handleGlyphSelect = useCallback((glyph) => {
+            setSelectedGlyph(glyph);
+            setUserGlyphHistory(prev => [...prev, glyph.id]); // Track selected glyphs
+            if (glyphViewTimerRef.current) clearTimeout(glyphViewTimerRef.current);
+            glyphViewTimerRef.current = setTimeout(() => {
+              console.log(`WARNING: Glyph ${glyph.label} viewed for too long.`);
+              // Add visual warning here if needed
+            }, 17000); // 17 seconds
+          }, [setSelectedGlyph, setUserGlyphHistory]);
+
+          // Ensure default selected glyph is always set if glyphsData changes (e.g., on first render)
+          useEffect(() => {
+            if (!selectedGlyph && glyphsData.length > 0) {
+              setSelectedGlyph(glyphsData[0]);
+            }
+          }, [glyphsData, selectedGlyph, setSelectedGlyph]);
+
+
+          if (!selectedGlyph) return <div className="text-zinc-400">Select a glyph to view details.</div>;
+
+          const isGlyphClassified = (glyph) => {
+            const classifiedLevels = [5, 'FAILED/CORRUPTED', 'CONTESTED', 4, 7, 'ROGUE/UNCONTAINED', 'ENTITY/UNCONTAINED', 'CONSTRUCT/ANCHOR', 'ARCHITECT/CATALYST', 'SEMI-SENTIENT/NODE'];
+            return classifiedLevels.includes(glyph.integrationLevel) && !hasOvercharged;
+          };
+
+          return (
+            <div className="grid md:grid-cols-2 gap-6 w-full max-w-5xl custom-scrollbar overflow-y-auto h-[70vh]">
+              {/* Glyph Selection List */}
+              <div className="space-y-4">
+                <h3 className="text-xl font-bold text-purple-300 mb-2">NODE CLASSIFICATIONS</h3>
+                {glyphsData.map((glyph) => (
+                  <Button
+                    key={glyph.id}
+                    onClick={() => handleGlyphSelect(glyph)}
+                    className={`w-full py-3 px-4 bg-gradient-to-r ${glyph.color} rounded text-left hover:scale-[1.02] transition ${
+                      isGlyphClassified(glyph) ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                    disabled={isGlyphClassified(glyph)}
+                  >
+                    <div className="text-xl font-bold">{glyph.label}</div>
+                    <div className="text-sm opacity-80">{glyph.integrationLevel}</div>
+                  </Button>
+                ))}
+              </div>
+
+              {/* Selected Glyph Details */}
+              <motion.div
+                key={selectedGlyph.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="bg-zinc-900 p-6 rounded-lg shadow-lg relative"
+              >
+                <h2 className="text-2xl font-semibold mb-2 text-purple-300">{selectedGlyph.label}</h2>
+                {isGlyphClassified(selectedGlyph) ? (
+                  <div className="text-red-500 text-lg mt-4">
+                    <p>[CLASSIFIED]: Access denied. Overcharge required to view this glyph's full details.</p>
+                    <p className="text-sm text-zinc-400 mt-2">Integrate further to unlock this knowledge.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="w-full h-40 bg-zinc-800 rounded-md mb-4 flex items-center justify-center">
+                      {selectedGlyph.svgPath && (
+                        <svg
+                          width="100%"
+                          height="100%"
+                          viewBox="0 0 200 200"
+                          fill="none"
+                          stroke="url(#glyphGradient)"
+                          strokeWidth="2"
+                          dangerouslySetInnerHTML={{ __html: selectedGlyph.svgPath }}
+                        >
+                           <defs>
+                            <linearGradient id="glyphGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                              <stop offset="0%" stopColor="#8B5CF6" />
+                              <stop offset="100%" stopColor="#EC4899" />
+                            </linearGradient>
+                          </defs>
+                        </svg>
+                      )}
+                    </div>
+                    <p className="text-zinc-300 text-base mb-2">{selectedGlyph.description}</p>
+                    <p className="mt-1 text-sm text-purple-300 italic">Integration Level: {selectedGlyph.integrationLevel}</p>
+                    <p className="text-sm text-purple-300 italic">Carrier Frequency: {selectedGlyph.carrierFrequency}</p>
+                    <p className="text-sm text-purple-300 italic">Location: {selectedGlyph.location}</p>
+                    {selectedGlyph.fieldNotes && (
+                      <p className="mt-3 text-zinc-400 text-sm"><span className="font-bold">Field Notes:</span> {selectedGlyph.fieldNotes}</p>
+                    )}
+                    {selectedGlyph.memoryFragment && (
+                      <p className="mt-3 text-zinc-400 text-sm"><span className="font-bold">Memory Fragment:</span> {selectedGlyph.memoryFragment}</p>
+                    )}
+                  </>
+                )}
+              </motion.div>
+            </div>
+          );
+        };
+
+
+        // --- CasolaroConsole Component ---
+        const CasolaroConsole = ({ showConsole, toggleConsole, consoleTab, setConsoleTab, currentPanel, hasOvercharged, currentPageIndex, glyphsData, selectedGlyph, setSelectedGlyph, userGlyphHistory, setUserGlyphHistory }) => {
+          const consoleVariants = {
+            hidden: { opacity: 0, x: '100%' },
+            visible: { opacity: 1, x: '0%', transition: { type: 'spring', stiffness: 100, damping: 20 } },
+            exit: { opacity: 0, x: '100%', transition: { duration: 0.3 } }
+          };
+
+          return (
+            <AnimatePresence>
+              {showConsole && (
+                <motion.div
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                  variants={consoleVariants}
+                  className="absolute inset-0 bg-black bg-opacity-95 z-50 p-8 flex flex-col justify-center items-center text-left overflow-y-auto custom-scrollbar"
+                >
+                  <h2 className="text-2xl font-bold text-green-400 mb-4 self-start">
+                    <span className="text-red-500">[</span>CASOLARO BACKDOOR CONSOLE<span className="text-red-500">]</span>
+                  </h2>
+
+                  {/* Console Tabs */}
+                  <div className="flex mb-4 self-start">
+                    <Button
+                      className={`px-4 py-2 text-sm rounded-t-lg ${consoleTab === 'log' ? 'bg-purple-700 text-purple-200' : 'bg-zinc-800 text-zinc-400'}`}
+                      onClick={() => setConsoleTab('log')}
+                    >
+                      Log
+                    </Button>
+                    <Button
+                      className={`ml-1 px-4 py-2 text-sm rounded-t-lg ${consoleTab === 'glyphs' ? 'bg-purple-700 text-purple-200' : 'bg-zinc-800 text-zinc-400'}`}
+                      onClick={() => setConsoleTab('glyphs')}
+                      disabled={!hasOvercharged}
+                    >
+                      Glyphs
+                    </Button>
+                  </div>
+
+                  {/* Console Content based on selected tab */}
+                  {consoleTab === 'log' && (
+                    <pre className="text-green-300 text-sm leading-relaxed whitespace-pre-wrap w-full max-w-3xl">
+                      {currentPanel.overlay || "No log entry for this panel."}
+                      {hasOvercharged && (currentPageIndex < 4 || currentPageIndex > 8) && (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: 0.5, duration: 1 }}
+                          className="mt-4 text-red-400"
+                        >
+                          <br/>
+                          <span className="text-red-500">[</span>WARNING<span className="text-red-500">]</span>: REALITY INTEGRITY COMPROMISED. ECHOES OF THE VOID PERSIST.
+                        </motion.div>
+                      )}
+                    </pre>
+                  )}
+
+                  {consoleTab === 'glyphs' && (
+                    <GlyphViewer glyphsData={glyphsData} hasOvercharged={hasOvercharged} selectedGlyph={selectedGlyph} setSelectedGlyph={setSelectedGlyph} userGlyphHistory={userGlyphHistory} setUserGlyphHistory={setUserGlyphHistory} />
+                  )}
+
+                  <Button
+                    className="mt-8 bg-green-600 hover:bg-green-500 rounded-full px-6 py-2 shadow-xl"
+                    onClick={() => toggleConsole('log')} // Close console, default to log tab
+                  >
+                    Close Console
+                  </Button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          );
+        };
+
+
+        // --- ComicReader Component ---
+        const ComicReader = ({ currentPageIndex, currentPanelIndex, currentPanel, hasOvercharged, audioLevel, handleNextPanel, handlePreviousPanel, handleSigilMouseDown, handleSigilMouseUp, chargeProgress, userGlyphHistory }) => {
+          const panelVariants = {
+            hidden: { opacity: 0, y: 10 },
+            visible: { opacity: 1, y: 0 },
+            exit: { opacity: 0, y: -10 },
+          };
+
+          const glitchVariants = {
+            initial: { opacity: 0 },
+            animate: {
+              opacity: [0, 0.1, 0, 0.2, 0, 0.15, 0],
+              scaleY: [1, 0.98, 1.02, 0.99, 1.01, 1],
+              skewX: [0, 0.5, -0.5, 0.2, -0.2, 0],
+              transition: {
+                repeat: Infinity,
+                duration: 0.15,
+                ease: "steps(2)",
+                repeatDelay: 0.3
+              }
+            },
+            exit: { opacity: 0 }
+          };
+
+          const shadowStrength = useTransform(audioLevel, [0, 1], [0, 20]);
+
+          // Determine if "disruption" glyphs have been viewed
+          const hasViewedDisruptionGlyphs = userGlyphHistory.some(glyphId => 
+            ['spahn_ranch', 'labiana_house', 'mockingsuit', 'authority_shell'].includes(glyphId)
+          );
+
+          // Apply more intense visual corruption if disruption glyphs were viewed AND overcharged
+          const dynamicFilter = hasOvercharged && hasViewedDisruptionGlyphs && (currentPageIndex < 4 || currentPageIndex > 8)
+            ? 'saturate(2.0) hue-rotate(330deg) blur(1px) contrast(1.2)' // More intense, reddish hue
+            : hasOvercharged && (currentPageIndex < 4 || currentPageIndex > 8)
+              ? 'saturate(1.5) hue-rotate(300deg) blur(0.5px)' // Normal overcharge
+              : 'none';
+          
+          const dynamicBackgroundImage = hasOvercharged && hasViewedDisruptionGlyphs && (currentPageIndex < 4 || currentPageIndex > 8)
+            ? 'repeating-linear-gradient(45deg, rgba(255,0,0,0.05) 0px, rgba(255,0,0,0.05) 2px, transparent 2px, transparent 4px)' // Reddish static
+            : hasOvercharged && (currentPageIndex < 4 || currentPageIndex > 8)
+              ? 'repeating-linear-gradient(45deg, rgba(255,0,255,0.02) 0px, rgba(255,0,255,0.02) 2px, transparent 2px, transparent 4px)' // Purple static
+              : 'none';
+
+
+          return (
+            <motion.div
+              className="md:col-span-4 col-span-full p-10 relative flex flex-col justify-center items-center md:items-start text-center md:text-left overflow-hidden"
+              style={{
+                boxShadow: shadowStrength.map(s => `0 0 ${s}px ${hasOvercharged ? 'rgba(255, 0, 255, 0.7)' : 'rgba(192, 132, 252, 0.5)'}`),
+                transition: 'box-shadow 0.1s ease-out',
+                filter: dynamicFilter,
+                backgroundImage: dynamicBackgroundImage,
+                backgroundSize: '8px 8px',
+                opacity: hasOvercharged && (currentPageIndex < 4 || currentPageIndex > 8) ? 0.95 : 1,
+              }}
+            >
+              <AnimatePresence mode="wait">
+                {/* Current Comic Panel Display */}
+                <motion.div
+                  key={`${currentPageIndex}-${currentPanelIndex}`}
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                  variants={panelVariants}
+                  transition={{ duration: 0.6 }}
+                  className="flex flex-col items-center md:items-start text-center md:text-left z-20 w-full h-full justify-center"
+                >
+                  <div className="text-zinc-300 text-lg mb-4 max-w-2xl w-full">
+                    <p className="text-purple-400 font-bold mb-2">Visual:</p>
+                    <p>{currentPanel.visual}</p>
+                  </div>
+                  {currentPanel.caption && (
+                    <p className="mt-2 text-zinc-400 text-sm max-w-2xl w-full">
+                      <span className="text-purple-300 font-bold">Caption:</span> {currentPanel.caption}
+                    </p>
+                  )}
+                  {currentPanel.speech && (
+                    <p className="mt-2 text-zinc-200 text-md max-w-2xl w-full">
+                      <span className="text-green-400 font-bold">Speech:</span> {currentPanel.speech}
+                    </p>
+                  )}
+                  {currentPanel.overlay && (
+                    <pre className="mt-2 text-red-400 text-xs max-w-2xl w-full whitespace-pre-wrap">
+                      <span className="text-red-500 font-bold">Overlay:</span> {currentPanel.overlay}
+                    </pre>
+                  )}
+                </motion.div>
+
+                {/* Glitch Layer - Only active for "Electric Jesus" (Page 2, index 1) panels */}
+                {currentPageIndex === 1 && (
+                  <motion.div
+                    key="glitch-overlay"
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    variants={glitchVariants}
+                    className="absolute inset-0 z-10 pointer-events-none"
+                    style={{
+                      backgroundColor: 'rgba(0, 255, 255, 0.03)',
+                      backgroundImage: 'repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0px, rgba(255,255,255,.05) 1px, transparent 1px, transparent 3px)',
+                      backgroundSize: '100% 6px',
+                    }}
+                  />
+                )}
+
+                {/* Central Pulsing Sigil - Now interactive for navigation */}
+                {((currentPageIndex === 1 && currentPanelIndex === 2) || // Page 2, Panel 3 (Sigil.Press)
+                  (currentPageIndex === 4 && currentPanelIndex === 2) || // Page 5, Panel 3 (Export Sigil)
+                  (currentPageIndex === 5 && currentPanelIndex === 1)) && ( // Page 6, Panel 2 (Wu's finger)
+                  <SigilInteraction
+                    hasOvercharged={hasOvercharged}
+                    isChargingSigil={isChargingSigil}
+                    audioLevel={audioLevel}
+                    handleSigilMouseDown={handleSigilMouseDown}
+                    handleSigilMouseUp={handleSigilMouseUp}
+                    chargeProgress={chargeProgress}
+                  />
+                )}
+
+              </AnimatePresence>
+
+              {/* Navigation Buttons */}
+              <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 flex space-x-4 z-30">
+                <Button
+                  className="bg-purple-600 hover:bg-purple-500 rounded-full px-6 py-2 shadow-xl"
+                  onClick={handlePreviousPanel}
+                  disabled={currentPageIndex === 0 && currentPanelIndex === 0}
+                >
+                  Previous Panel
+                </Button>
+                <Button
+                  className="bg-purple-600 hover:bg-purple-500 rounded-full px-6 py-2 shadow-xl"
+                  onClick={handleNextPanel}
+                >
+                  {currentPageIndex === comicScript.length - 1 && currentPanelIndex === comicScript[currentPageIndex].panels.length - 1 ? 'Restart Comic' : 'Next Panel'}
+                </Button>
+              </div>
+            </motion.div>
+          );
+        };
+
+
+        // --- Main App Component ---
+        function App() {
+          const [currentPageIndex, setCurrentPageIndex] = useState(0);
+          const [currentPanelIndex, setCurrentPanelIndex] = useState(0);
+          const [isMuted, setIsMuted] = useState(false);
+          const [isChargingSigil, setIsChargingSigil] = useState(false);
+          const [hasOvercharged, setHasOvercharged] = useState(false);
+          const [showConsole, setShowConsole] = useState(false);
+          const [consoleTab, setConsoleTab] = useState('log');
+          const [selectedGlyph, setSelectedGlyph] = useState(glyphsData[0]);
+          const [userGlyphHistory, setUserGlyphHistory] = useState([]); // New state for tracking glyph selections
+
+          const currentPanel = comicScript[currentPageIndex].panels[currentPanelIndex];
+          const currentSceneSound = currentPanel.sound;
+
+          // Refs for Tone.js (passed to AudioEngine)
+          const analyserRef = useRef(null);
+          const overchargeFilterRef = useRef(null);
+          const overchargeDistortionRef = useRef(null);
+
+          // Framer Motion values for visual sync (managed here, passed down)
+          const audioLevel = useMotionValue(0);
+          const chargeProgress = useMotionValue(0);
+
+          // Thresholds for triggering scene change and overcharge
+          const AUDIO_THRESHOLD = 0.5;
+          const CHARGE_DURATION_MS = 1000;
+          const OVERCHARGE_DURATION_FACTOR = 2;
+          const OVERCHARGE_DURATION_MS = CHARGE_DURATION_MS * OVERCHARGE_DURATION_FACTOR;
+
+          const chargeTimeoutRef = useRef(null);
+          const overchargeTimeoutRef = useRef(null);
+          const glyphViewTimerRef = useRef(null);
+
+          // Audio analysis loop for visual sync and scene transition trigger
+          useEffect(() => {
+            let animationFrameId;
+            let chargeStartTime = null;
+
+            const updateAudioLevel = () => {
+              if (analyserRef.current && Tone.context.state === 'running') {
+                const rms = analyserRef.current.getAverage();
+                const normalizedRms = Tone.dbToGain(rms);
+                audioLevel.set(normalizedRms);
+
+                if (isChargingSigil) {
+                  if (normalizedRms >= AUDIO_THRESHOLD) {
+                    if (chargeStartTime === null) {
+                      chargeStartTime = performance.now();
+                    }
+                    const timeCharged = performance.now() - chargeStartTime;
+                    const progress = Math.min(1, timeCharged / CHARGE_DURATION_MS);
+                    chargeProgress.set(progress);
+
+                    if (timeCharged >= OVERCHARGE_DURATION_MS && !hasOvercharged) {
+                      setHasOvercharged(true);
+                      if (overchargeTimeoutRef.current) clearTimeout(overchargeTimeoutRef.current);
+                      overchargeTimeoutRef.current = setTimeout(() => {
+                        handleOverchargePanel();
+                        setIsChargingSigil(false);
+                        chargeProgress.set(0);
+                        chargeStartTime = null;
+                      }, 100);
+                    } else if (timeCharged >= CHARGE_DURATION_MS && !hasOvercharged) {
+                      if (chargeTimeoutRef.current) clearTimeout(chargeTimeoutRef.current);
+                      chargeTimeoutRef.current = setTimeout(() => {
+                        handleNextPanel();
+                        setIsChargingSigil(false);
+                        chargeProgress.set(0);
+                        chargeStartTime = null;
+                      }, 50);
+                    }
+                  } else {
+                    chargeStartTime = null;
+                    chargeProgress.set(0);
+                    if (chargeTimeoutRef.current) clearTimeout(chargeTimeoutRef.current);
+                    if (overchargeTimeoutRef.current) clearTimeout(overchargeTimeoutRef.current);
+                  }
+                } else {
+                    chargeProgress.set(0);
+                    chargeStartTime = null;
+                }
+              }
+              animationFrameId = requestAnimationFrame(updateAudioLevel);
+            };
+
+            animationFrameId = requestAnimationFrame(updateAudioLevel);
+
+            return () => {
+              cancelAnimationFrame(animationFrameId);
+              if (chargeTimeoutRef.current) clearTimeout(chargeTimeoutRef.current);
+              if (overchargeTimeoutRef.current) clearTimeout(overchargeTimeoutRef.current);
+            };
+          }, [audioLevel, isChargingSigil, chargeProgress, hasOvercharged]);
+
+
+          // Navigation handlers for panels
+          const handleNextPanel = useCallback(() => {
+            if (currentPanelIndex < comicScript[currentPageIndex].panels.length - 1) {
+              setCurrentPanelIndex(currentPanelIndex + 1);
+            } else if (currentPageIndex < comicScript.length - 1) {
+              setCurrentPageIndex(currentPageIndex + 1);
+              setCurrentPanelIndex(0); // Reset panel index for new page
+            } else {
+              // End of comic, loop back to start
+              setCurrentPageIndex(0);
+              setCurrentPanelIndex(0);
+              setHasOvercharged(false); // Reset overcharge on full loop
+              setUserGlyphHistory([]); // Reset history on full comic loop
+            }
+          }, [currentPageIndex, currentPanelIndex]);
+
+          const handlePreviousPanel = useCallback(() => {
+            if (currentPanelIndex > 0) {
+              setCurrentPanelIndex(currentPanelIndex - 1);
+            } else if (currentPageIndex > 0) {
+              setCurrentPageIndex(currentPageIndex - 1);
+              setCurrentPanelIndex(comicScript[currentPageIndex - 1].panels.length - 1); // Go to last panel of previous page
+            }
+          }, [currentPageIndex, currentPanelIndex]);
+
+          const handleOverchargePanel = useCallback(() => {
+            // This will jump to the first panel of the OVERCHARGE page (Page 5, index 4)
+            setCurrentPageIndex(4); // Page 5 is at index 4 in comicScript
+            setCurrentPanelIndex(0);
+            setHasOvercharged(true);
+          }, []);
+
+          const toggleMute = useCallback(async () => {
+            if (Tone.context.state !== 'running') {
+              await Tone.start();
+            }
+            Tone.Destination.mute = !Tone.Destination.mute;
+            setIsMuted(Tone.Destination.mute);
+          }, []);
+
+          // Sigil interaction handlers
+          const handleSigilMouseDown = useCallback(() => {
+            setIsChargingSigil(true);
+          }, []);
+
+          const handleSigilMouseUp = useCallback(() => {
+            setIsChargingSigil(false);
+            chargeProgress.set(0);
+            if (chargeTimeoutRef.current) {
+              clearTimeout(chargeTimeoutRef.current);
+              chargeTimeoutRef.current = null;
+            }
+            if (overchargeTimeoutRef.current) {
+              clearTimeout(overchargeTimeoutRef.current);
+              overchargeTimeoutRef.current = null;
+            }
+          }, [chargeProgress]);
+
+          // Console toggle
+          const toggleConsole = useCallback((tab = 'log') => {
+            if (tab === 'glyphs' && !hasOvercharged) {
+              return;
+            }
+            setShowConsole(prev => !prev);
+            setConsoleTab(tab);
+          }, [hasOvercharged]);
+
+          // Function to generate and download the Sigil SVG
+          const generateSigilSVG = useCallback(() => {
+            const sigilColor = hasOvercharged ? '#FF00FF' : '#C084FC';
+            const glowColor = hasOvercharged ? 'rgba(255,0,255,0.9)' : 'rgba(192,132,252,0.7)';
+            const innerColor = hasOvercharged ? '#EF4444' : '#C084FC';
+
+            const timestamp = new Date().toISOString();
+
+            // Determine glyph history string for embedding
+            const historyString = userGlyphHistory.length > 0 ? `HISTORY: ${userGlyphHistory.join(',')}` : 'HISTORY: NONE';
+
+            const svgContent = `
+              <svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <filter id="glow">
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur" />
+                    <feFlood flood-color="${glowColor}" flood-opacity="1" result="color" />
+                    <feComposite in="color" in2="blur" operator="in" result="glow" />
+                    <feMerge>
+                      <feMergeNode in="glow"/>
+                      <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                  </filter>
+                </defs>
+                <rect x="0" y="0" width="200" height="200" fill="black"/>
+                <circle cx="100" cy="100" r="80" fill="${sigilColor}20" stroke="${sigilColor}" stroke-width="2" filter="url(#glow)"/>
+                <circle cx="100" cy="100" r="70" fill="${innerColor}30" />
+                <text x="100" y="125" font-family="monospace" font-size="80" fill="${sigilColor}" text-anchor="middle" dominant-baseline="middle">Ω</text>
+                ${hasOvercharged ? `
+                  <line x1="20" y1="20" x2="180" y2="180" stroke="${glowColor}" stroke-width="2" opacity="0.5"/>
+                  <line x1="180" y1="20" x2="20" y2="180" stroke="${glowColor}" stroke-width="2" opacity="0.5"/>
+                  <rect x="10" y="10" width="180" height="180" fill="none" stroke="${glowColor}" stroke-width="3" stroke-dasharray="5 5"/>
+                ` : ''}
+                <text x="10" y="190" font-family="monospace" font-size="10" fill="${sigilColor}">STATE: ${hasOvercharged ? 'OVERCHARGED' : 'NORMAL'}</text>
+                <text x="10" y="15" font-family="monospace" font-size="10" fill="${sigilColor}">MYTH_ENGINE_V1.0</text>
+                <text x="10" y="175" font-family="monospace" font-size="10" fill="${sigilColor}">UNVEILED_AT: ${timestamp}</text>
+                <text x="10" y="165" font-family="monospace" font-size="10" fill="${sigilColor}">${historyString}</text>
+              </svg>
+            `;
+
+            const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `sigil_echo_${hasOvercharged ? 'overcharged' : 'normal'}_${new Date().getTime()}.svg`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }, [hasOvercharged, userGlyphHistory]); // Added userGlyphHistory to dependencies
+
+          // Function to generate and download the PDF scriptbook
+          const generatePdfScriptbook = useCallback(async () => {
+            if (typeof window.jspdf === 'undefined' || typeof window.jspdf.jsPDF === 'undefined') {
+              console.error("jsPDF library not loaded. Please ensure the CDN script is included.");
+              return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({
+              orientation: 'portrait',
+              unit: 'pt',
+              format: 'letter'
+            });
+
+            const margin = 36;
+            let y = margin;
+            const lineHeight = 12;
+            const maxLineWidth = doc.internal.pageSize.getWidth() - 2 * margin;
+
+            doc.setFont('Courier');
+            doc.setTextColor(50, 205, 50);
+            doc.setFillColor(0, 0, 0);
+
+            // --- Cover Page ---
+            doc.addPage();
+            doc.rect(0, 0, doc.internal.pageSize.getWidth(), doc.internal.pageSize.getHeight(), 'F');
+
+            doc.setFontSize(36);
+            doc.setTextColor(192, 132, 252);
+            doc.text("MYTH ENGINE", doc.internal.pageSize.getWidth() / 2, y + 100, { align: 'center' });
+            y += 40;
+            doc.setFontSize(24);
+            doc.text("THE UNVEILING: SIGIL RUN", doc.internal.pageSize.getWidth() / 2, y + 100, { align: 'center' });
+            y += 30;
+            doc.setFontSize(14);
+            doc.setTextColor(50, 205, 50);
+            doc.text("CLASSIFIED DOCUMENT", doc.internal.pageSize.getWidth() / 2, y + 100, { align: 'center' });
+            y += 20;
+            doc.text(`UNVEILED: ${new Date().toISOString().split('T')[0]}`, doc.internal.pageSize.getWidth() / 2, y + 100, { align: 'center' });
+            y += 20;
+            doc.text("PROJECT: OPERATOR", doc.internal.pageSize.getWidth() / 2, y + 100, { align: 'center' });
+            y = margin;
+
+            // --- Table of Contents ---
+            doc.addPage();
+            doc.rect(0, 0, doc.internal.pageSize.getWidth(), doc.internal.pageSize.getHeight(), 'F');
+            doc.setFontSize(20);
+            doc.setTextColor(192, 132, 252);
+            doc.text("TABLE OF CONTENTS", margin, y + 30);
+            y += 60;
+            doc.setFontSize(12);
+            doc.setTextColor(50, 205, 50);
+
+            const tocEntries = [];
+            let currentPageNum = 3;
+
+            comicScript.forEach((page, pageIdx) => {
+              tocEntries.push({ title: `PAGE ${pageIdx + 1}: ${page.pageTitle}`, pageNum: currentPageNum });
+              currentPageNum++;
+            });
+
+            tocEntries.forEach(entry => {
+              if (y + lineHeight > doc.internal.pageSize.getHeight() - margin) {
+                doc.addPage();
+                doc.rect(0, 0, doc.internal.pageSize.getWidth(), doc.internal.pageSize.getHeight(), 'F');
+                y = margin;
+              }
+              doc.text(`${entry.title} . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . `
+          <Button
+            className="bg-purple-600 hover:bg-purple-500 rounded-full px-6 py-2 shadow-xl"
+            onClick={handleNextPanel}
+          >
+            {currentPageIndex === comicScript.length - 1 && currentPanelIndex === comicScript[currentPageIndex].panels.length - 1 ? 'Restart Comic' : 'Next Panel'}
+          </Button>
+        </div>
+
+
+        {/* Mute Button */}
+        <div className="absolute top-4 right-4 z-40">
+          <Button
+            className="bg-zinc-700 hover:bg-zinc-600 rounded-full px-4 py-2 text-sm"
+            onClick={toggleMute}
+          >
+            {isMuted ? 'Unmute' : 'Mute'}
+          </Button>
+        </div>
+
+        {/* Casolaro Backdoor Console Toggle Button */}
+        <div className="absolute top-4 left-4 z-40">
+          <Button
+            className={`rounded-full px-4 py-2 text-sm ${hasOvercharged ? 'bg-purple-800 hover:bg-purple-700 text-purple-300' : 'bg-zinc-700 text-zinc-500 cursor-not-allowed'}`}
+            onClick={() => toggleConsole('log')}
+            disabled={!hasOvercharged && currentPanel.overlay === undefined} // Only enabled if overcharged OR if current panel has overlay
+          >
+            {showConsole && consoleTab === 'log' ? 'Close Log' : 'Open Log'}
+          </Button>
+          <Button
+            className={`ml-2 rounded-full px-4 py-2 text-sm ${hasOvercharged ? 'bg-purple-800 hover:bg-purple-700 text-purple-300' : 'bg-zinc-700 text-zinc-500 cursor-not-allowed'}`}
+            onClick={() => toggleConsole('glyphs')}
+            disabled={!hasOvercharged} // Glyphs tab strictly requires overcharge
+          >
+            {showConsole && consoleTab === 'glyphs' ? 'Close Glyphs' : 'Open Glyphs'}
+          </Button>
+        </div>
+
+        {/* Export Sigil Button - Appears on specific panels */}
+        {((currentPageIndex === 4 && currentPanelIndex === 2) || // Page 5, Panel 3 (Export Sigil)
+          (currentPageIndex === 8 && currentPanelIndex === 2)) && ( // Page 9, Panel 3 (Final frame)
+          <div className="absolute bottom-4 left-4 z-40">
+            <Button
+              className="bg-purple-800 hover:bg-purple-700 text-purple-300 rounded-full px-4 py-2 shadow-xl"
+              onClick={generateSigilSVG}
+            >
+              Export Sigil
+            </Button>
+          </div>
+        )}
+
+        {/* Generate PDF Scriptbook Button */}
+        <div className="absolute bottom-4 right-4 z-40">
+            <Button
+                className="bg-purple-800 hover:bg-purple-700 text-purple-300 rounded-full px-4 py-2 shadow-xl"
+                onClick={generatePdfScriptbook}
+            >
+                Generate PDF Scriptbook
+            </Button>
+        </div>
+
+        {/* Casolaro Backdoor Console Overlay */}
+        <CasolaroConsole
+          showConsole={showConsole}
+          toggleConsole={toggleConsole}
+          consoleTab={consoleTab}
+          setConsoleTab={setConsoleTab}
+          currentPanel={currentPanel}
+          hasOvercharged={hasOvercharged}
+          currentPageIndex={currentPageIndex}
+          glyphsData={glyphsData}
+          selectedGlyph={selectedGlyph}
+          setSelectedGlyph={setSelectedGlyph}
+          userGlyphHistory={userGlyphHistory} // Pass history to console
+          setUserGlyphHistory={setUserGlyphHistory} // Pass setter to console
+        />
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.render(<App />, document.getElementById('root'));
+
+    </script>
+</body>
+</html>
+

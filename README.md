@@ -1,3 +1,5 @@
+/mnt/data/A_digital_artwork_for_a_GitHub_profile_preview_ima.png]
+
 # M.LE.1.H.AI
 ## Meta-Linguistic Entity 1: Hybrid Artificial Intelligence
 

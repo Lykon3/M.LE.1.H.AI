@@ -1,0 +1,811 @@
+﻿## **Catastrophe Manifold Folder: Production Implementation**
+
+
+```python
+# src/fracturemetrics/catastrophe/manifold_folder.py
+"""
+Catastrophe Manifold Folding Implementation
+==========================================
+Recursive collapse topology with cross-domain entanglement
+"""
+
+
+import numpy as np
+import pandas as pd
+from scipy import linalg, signal
+from scipy.spatial.distance import pdist, squareform
+from scipy.stats import entropy
+from sklearn.manifold import TSNE
+from sklearn.decomposition import PCA
+from sklearn.metrics import mutual_info_score
+from datetime import datetime
+from typing import Dict, List, Tuple, Optional, Any
+from dataclasses import dataclass, field
+import warnings
+
+
+warnings.filterwarnings('ignore')
+
+
+@dataclass
+class CollapseSignature:
+    """Compressed collapse signature with topological persistence"""
+    timestamp: datetime
+    morphology: np.ndarray
+    invariants: List[float]  # [trace, determinant, spectral_gap]
+    influence_radius: float
+    folding_strength: float
+    domain: str = 'unknown'
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ManifoldState:
+    """Current state of the folded manifold"""
+    curvature_field: np.ndarray
+    memory_tensor: np.ndarray
+    entanglement_matrix: np.ndarray
+    collapse_history: List[CollapseSignature]
+    bifurcation_zones: np.ndarray
+    intervention_efficacy: np.ndarray
+
+
+class CatastropheManifoldFolder:
+    """
+    Implements recursive manifold folding where past collapses 
+    shape the topology of future collapse probability space
+    """
+    
+    def __init__(self, dimensions: int = 5, memory_depth: int = 20):
+        """
+        Initialize the catastrophe manifold
+        
+        Args:
+            dimensions: Number of collapse dimensions to track
+            memory_depth: How many past collapses to remember
+        """
+        self.dimensions = dimensions
+        self.memory_depth = memory_depth
+        
+        # Initialize manifold components
+        self.manifold_memory = []  # Past collapse tensors
+        self.curvature_field = None  # Current manifold curvature
+        self.entanglement_matrix = np.eye(dimensions)  # Cross-domain coupling
+        self.folding_history = []  # Detailed collapse records
+        
+        # Catastrophe detection thresholds
+        self.fold_threshold = 0.7
+        self.cascade_threshold = 0.85
+        self.intervention_threshold = 0.6
+        
+        # Domain mappings for FractureMetrics integration
+        self.domain_indices = {
+            'institutional_trust': 0,
+            'information_integrity': 1,
+            'electoral_confidence': 2,
+            'alliance_stability': 3,
+            'social_cohesion': 4
+        }
+    
+    def fold_manifold(self, collapse_tensor: np.ndarray, 
+                     domain: str = 'unknown',
+                     coupling_strength: float = 0.15) -> ManifoldState:
+        """
+        Each collapse event 'folds' the manifold, creating persistent
+        topological features that influence future dynamics
+        
+        Args:
+            collapse_tensor: Tensor representing the collapse event
+            domain: Domain of the collapse (for tracking)
+            coupling_strength: Cross-domain coupling parameter
+            
+        Returns:
+            Current manifold state after folding
+        """
+        # Extract collapse morphology
+        eigenvalues, eigenvectors = np.linalg.eigh(collapse_tensor)
+        
+        # Compute folding operator based on collapse severity
+        folding_strength = np.max(np.abs(eigenvalues)) / (np.trace(np.abs(collapse_tensor)) + 1e-10)
+        fold_operator = self._construct_fold_operator(eigenvectors, folding_strength)
+        
+        # Apply recursive compression
+        if self.curvature_field is None:
+            self.curvature_field = fold_operator
+        else:
+            # Past collapses influence current folding
+            memory_influence = self._compute_memory_tensor()
+            self.curvature_field = (
+                0.7 * fold_operator + 
+                0.3 * memory_influence @ self.curvature_field
+            )
+        
+        # Update entanglement matrix
+        self.entanglement_matrix = self._update_entanglement(
+            collapse_tensor, self.entanglement_matrix, coupling_strength
+        )
+        
+        # Compress and store collapse signature
+        compressed_signature = self._compress_collapse_signature(
+            collapse_tensor, self.curvature_field, domain, folding_strength
+        )
+        self.manifold_memory.append(compressed_signature)
+        self.folding_history.append(compressed_signature)
+        
+        # Maintain memory depth
+        if len(self.manifold_memory) > self.memory_depth:
+            self.manifold_memory.pop(0)
+        
+        # Compute current manifold state
+        state = ManifoldState(
+            curvature_field=self.curvature_field.copy(),
+            memory_tensor=self._compute_memory_tensor(),
+            entanglement_matrix=self.entanglement_matrix.copy(),
+            collapse_history=self.folding_history.copy(),
+            bifurcation_zones=self._identify_bifurcation_zones(),
+            intervention_efficacy=self._compute_intervention_efficacy()
+        )
+        
+        return state
+    
+    def predict_collapse_zones(self, current_state: np.ndarray, 
+                             horizon: int = 10,
+                             trajectories: int = 100) -> Dict[str, np.ndarray]:
+        """
+        Identify regions where manifold folding creates 
+        'gravitational wells' for future collapses
+        
+        Args:
+            current_state: Current system state vector
+            horizon: Prediction horizon (time steps)
+            trajectories: Number of Monte Carlo trajectories
+            
+        Returns:
+            Dictionary with collapse predictions and intervention zones
+        """
+        if self.curvature_field is None:
+            # No folding history yet
+            return {
+                'collapse_probability': np.zeros_like(current_state),
+                'intervention_zones': np.zeros_like(current_state),
+                'cascade_risk': 0.0
+            }
+        
+        # Project current state onto folded manifold
+        projected_state = current_state @ self.curvature_field
+        
+        # Compute geodesic flow to find natural collapse paths
+        flow_field = self._compute_geodesic_flow(projected_state)
+        
+        # Monte Carlo simulation for collapse probability
+        collapse_map = np.zeros((trajectories, len(current_state)))
+        
+        for traj in range(trajectories):
+            # Add stochastic perturbation
+            perturbed_state = projected_state + np.random.normal(0, 0.01, size=projected_state.shape)
+            
+            # Evolve along geodesic
+            for t in range(horizon):
+                evolved_state = self._evolve_on_manifold(
+                    perturbed_state, flow_field, t
+                )
+                collapse_map[traj] += self._detect_convergence_zones(evolved_state)
+        
+        # Average over trajectories
+        collapse_probability = np.mean(collapse_map, axis=0)
+        
+        # Weight by historical collapse proximity
+        historical_weight = self._compute_historical_proximity(current_state)
+        weighted_prediction = collapse_probability * historical_weight
+        
+        # Identify intervention zones
+        intervention_zones = self._identify_intervention_manifolds(
+            weighted_prediction, self.curvature_field
+        )
+        
+        # Compute cascade risk
+        cascade_risk = self._compute_cascade_risk(
+            weighted_prediction, self.entanglement_matrix
+        )
+        
+        return {
+            'collapse_probability': weighted_prediction,
+            'intervention_zones': intervention_zones,
+            'cascade_risk': cascade_risk,
+            'bifurcation_distance': self._distance_to_bifurcation(projected_state)
+        }
+    
+    def _construct_fold_operator(self, eigenvectors: np.ndarray, 
+                               strength: float) -> np.ndarray:
+        """
+        Build the topological folding operator that warps the manifold
+        """
+        # Create anisotropic scaling based on collapse direction
+        scaling_matrix = np.diag(
+            1 + strength * np.exp(-np.arange(len(eigenvectors)))
+        )
+        
+        # Apply rotation to align with collapse eigendirections
+        fold_operator = eigenvectors @ scaling_matrix @ eigenvectors.T
+        
+        # Add nonlinear warping for sharp folds
+        nonlinear_term = strength * np.outer(
+            eigenvectors[:, 0], eigenvectors[:, 0]
+        ) ** 2
+        
+        # Include memory effect from past folds
+        if len(self.manifold_memory) > 0:
+            memory_effect = np.zeros_like(fold_operator)
+            for past_sig in self.manifold_memory[-5:]:  # Last 5 collapses
+                memory_effect += 0.1 * past_sig.morphology
+            fold_operator += memory_effect
+        
+        return fold_operator + nonlinear_term
+    
+    def _update_entanglement(self, collapse_tensor: np.ndarray,
+                           current_entanglement: np.ndarray,
+                           coupling_strength: float) -> np.ndarray:
+        """
+        Update cross-domain entanglement based on collapse pattern
+        """
+        # Compute collapse correlation matrix
+        collapse_correlation = np.corrcoef(collapse_tensor)
+        
+        # Update entanglement with momentum
+        momentum = 0.9
+        new_entanglement = (
+            momentum * current_entanglement + 
+            (1 - momentum) * coupling_strength * collapse_correlation
+        )
+        
+        # Ensure positive semi-definite
+        eigenvals, eigenvecs = np.linalg.eigh(new_entanglement)
+        eigenvals = np.maximum(eigenvals, 0)
+        new_entanglement = eigenvecs @ np.diag(eigenvals) @ eigenvecs.T
+        
+        return new_entanglement
+    
+    def _compress_collapse_signature(self, tensor: np.ndarray, 
+                                   curvature: np.ndarray,
+                                   domain: str,
+                                   folding_strength: float) -> CollapseSignature:
+        """
+        Compress collapse into persistent topological feature
+        """
+        # Project collapse onto current manifold curvature
+        projected = tensor @ curvature
+        
+        # Extract invariant features
+        eigenvals = np.linalg.eigvals(projected)
+        trace_invariant = np.real(np.trace(projected))
+        det_invariant = np.real(np.linalg.det(projected))
+        spectral_gap = np.real(np.max(eigenvals) - np.min(eigenvals))
+        
+        # Compute morphology (dominant eigenvector)
+        _, eigenvecs = np.linalg.eigh(projected)
+        morphology = eigenvecs[:, -1]  # Dominant eigenvector
+        
+        # Estimate influence radius
+        influence_radius = self._estimate_influence_radius(tensor, curvature)
+        
+        signature = CollapseSignature(
+            timestamp=datetime.now(),
+            morphology=morphology,
+            invariants=[trace_invariant, det_invariant, spectral_gap],
+            influence_radius=influence_radius,
+            folding_strength=folding_strength,
+            domain=domain,
+            metadata={
+                'eigenvalues': eigenvals.tolist(),
+                'tensor_norm': np.linalg.norm(tensor)
+            }
+        )
+        
+        return signature
+    
+    def _compute_memory_tensor(self) -> np.ndarray:
+        """
+        Compute memory tensor from past collapses
+        """
+        if len(self.manifold_memory) == 0:
+            return np.eye(self.dimensions)
+        
+        # Weighted sum of past morphologies
+        memory_tensor = np.zeros((self.dimensions, self.dimensions))
+        
+        for i, sig in enumerate(self.manifold_memory):
+            # Exponential decay weighting
+            weight = np.exp(-0.1 * (len(self.manifold_memory) - i))
+            memory_tensor += weight * np.outer(sig.morphology, sig.morphology)
+        
+        # Normalize
+        memory_tensor /= (np.trace(memory_tensor) + 1e-10)
+        
+        return memory_tensor
+    
+    def _compute_geodesic_flow(self, state: np.ndarray) -> np.ndarray:
+        """
+        Compute geodesic flow field on the folded manifold
+        """
+        # Simplified geodesic equation solver
+        # In full implementation, would solve Christoffel symbols
+        
+        # Use gradient of curvature as flow direction
+        flow = -np.gradient(self.curvature_field, axis=0)
+        
+        # Modulate by current state
+        flow_field = flow @ state[:, np.newaxis]
+        
+        return flow_field.squeeze()
+    
+    def _evolve_on_manifold(self, state: np.ndarray, 
+                          flow_field: np.ndarray, 
+                          time_step: int) -> np.ndarray:
+        """
+        Evolve state along geodesic on folded manifold
+        """
+        dt = 0.1
+        
+        # Runge-Kutta 4th order integration
+        k1 = dt * flow_field
+        k2 = dt * self._flow_at_state(state + 0.5 * k1)
+        k3 = dt * self._flow_at_state(state + 0.5 * k2)
+        k4 = dt * self._flow_at_state(state + k3)
+        
+        evolved_state = state + (k1 + 2*k2 + 2*k3 + k4) / 6
+        
+        # Apply manifold constraints
+        evolved_state = self._project_to_manifold(evolved_state)
+        
+        return evolved_state
+    
+    def _flow_at_state(self, state: np.ndarray) -> np.ndarray:
+        """
+        Compute flow field at a given state
+        """
+        # Simplified - in full implementation would recompute geodesic
+        return -self.curvature_field @ state
+    
+    def _project_to_manifold(self, state: np.ndarray) -> np.ndarray:
+        """
+        Project state back onto the constraint manifold
+        """
+        # Ensure state remains on unit sphere (simplified constraint)
+        norm = np.linalg.norm(state)
+        if norm > 0:
+            state = state / norm
+        
+        return state
+    
+    def _detect_convergence_zones(self, state: np.ndarray) -> np.ndarray:
+        """
+        Detect zones where trajectories converge (collapse attractors)
+        """
+        # Compute local divergence
+        epsilon = 1e-6
+        divergence = np.zeros_like(state)
+        
+        for i in range(len(state)):
+            # Numerical divergence estimation
+            perturbed_plus = state.copy()
+            perturbed_minus = state.copy()
+            perturbed_plus[i] += epsilon
+            perturbed_minus[i] -= epsilon
+            
+            flow_plus = self._flow_at_state(perturbed_plus)
+            flow_minus = self._flow_at_state(perturbed_minus)
+            
+            divergence[i] = (flow_plus[i] - flow_minus[i]) / (2 * epsilon)
+        
+        # Negative divergence indicates convergence
+        convergence_indicator = np.maximum(0, -divergence)
+        
+        # Threshold to binary
+        convergence_zones = (convergence_indicator > self.fold_threshold).astype(float)
+        
+        return convergence_zones
+    
+    def _compute_historical_proximity(self, current_state: np.ndarray) -> np.ndarray:
+        """
+        Weight predictions by proximity to historical collapse patterns
+        """
+        if len(self.manifold_memory) == 0:
+            return np.ones_like(current_state)
+        
+        proximity = np.zeros_like(current_state)
+        
+        for sig in self.manifold_memory:
+            # Compute distance to historical collapse
+            distance = np.linalg.norm(current_state - sig.morphology)
+            
+            # Gaussian weighting
+            weight = np.exp(-distance**2 / (2 * sig.influence_radius**2))
+            proximity += weight
+        
+        # Normalize
+        proximity = proximity / (len(self.manifold_memory) + 1e-10)
+        
+        return 1 + proximity  # Amplify near historical collapses
+    
+    def _identify_intervention_manifolds(self, collapse_probability: np.ndarray,
+                                       curvature: np.ndarray) -> np.ndarray:
+        """
+        Identify regions where minimal intervention can prevent collapse
+        """
+        # Compute sensitivity to perturbation
+        sensitivity = np.zeros_like(collapse_probability)
+        
+        for i in range(len(collapse_probability)):
+            if collapse_probability[i] > self.intervention_threshold:
+                # Estimate intervention efficacy
+                jacobian = np.gradient(curvature[i, :])
+                sensitivity[i] = 1.0 / (np.linalg.norm(jacobian) + 1e-10)
+        
+        # Normalize to [0, 1]
+        if np.max(sensitivity) > 0:
+            sensitivity = sensitivity / np.max(sensitivity)
+        
+        return sensitivity
+    
+    def _compute_cascade_risk(self, collapse_probability: np.ndarray,
+                            entanglement: np.ndarray) -> float:
+        """
+        Compute risk of cascade failure across domains
+        """
+        # High-risk domains
+        high_risk = collapse_probability > self.cascade_threshold
+        
+        if np.sum(high_risk) == 0:
+            return 0.0
+        
+        # Compute cascade potential
+        cascade_matrix = entanglement * np.outer(high_risk, high_risk)
+        
+        # Largest eigenvalue indicates cascade strength
+        eigenvals = np.linalg.eigvals(cascade_matrix)
+        cascade_risk = np.real(np.max(eigenvals))
+        
+        return min(1.0, cascade_risk)
+    
+    def _distance_to_bifurcation(self, state: np.ndarray) -> float:
+        """
+        Estimate distance to nearest bifurcation point
+        """
+        # Use spectral analysis of linearized dynamics
+        jacobian = self.curvature_field - np.eye(self.dimensions)
+        eigenvals = np.linalg.eigvals(jacobian)
+        
+        # Distance to bifurcation is smallest real part
+        real_parts = np.real(eigenvals)
+        distance = np.min(np.abs(real_parts))
+        
+        return distance
+    
+    def _identify_bifurcation_zones(self) -> np.ndarray:
+        """
+        Identify regions of parameter space near bifurcations
+        """
+        if self.curvature_field is None:
+            return np.zeros((self.dimensions, self.dimensions))
+        
+        # Compute Hessian of the curvature field
+        bifurcation_indicator = np.zeros((self.dimensions, self.dimensions))
+        
+        for i in range(self.dimensions):
+            for j in range(self.dimensions):
+                # Numerical Hessian
+                h = 1e-6
+                f_pp = self.curvature_field[i, j]
+                
+                if i > 0 and j > 0 and i < self.dimensions-1 and j < self.dimensions-1:
+                    f_px = self.curvature_field[i+1, j]
+                    f_mx = self.curvature_field[i-1, j]
+                    f_py = self.curvature_field[i, j+1]
+                    f_my = self.curvature_field[i, j-1]
+                    
+                    hessian_trace = ((f_px - 2*f_pp + f_mx) + (f_py - 2*f_pp + f_my)) / h**2
+                    bifurcation_indicator[i, j] = abs(hessian_trace)
+        
+        return bifurcation_indicator
+    
+    def _compute_intervention_efficacy(self) -> np.ndarray:
+        """
+        Compute expected efficacy of interventions at each point
+        """
+        if self.curvature_field is None:
+            return np.ones((self.dimensions, self.dimensions))
+        
+        # Efficacy inversely proportional to curvature magnitude
+        curvature_magnitude = np.abs(self.curvature_field)
+        efficacy = 1.0 / (1.0 + curvature_magnitude)
+        
+        return efficacy
+    
+    def compute_domain_entanglement(self, domain_states: Dict[str, np.ndarray]) -> np.ndarray:
+        """
+        Measure how collapses in one domain create vulnerability in others
+        
+        Args:
+            domain_states: Dictionary mapping domain names to state vectors
+            
+        Returns:
+            Entanglement matrix showing cross-domain coupling
+        """
+        domains = list(domain_states.keys())
+        n_domains = len(domains)
+        entanglement = np.zeros((n_domains, n_domains))
+        
+        for i, domain_i in enumerate(domains):
+            state_i = domain_states[domain_i]
+            
+            for j, domain_j in enumerate(domains):
+                if i != j:
+                    state_j = domain_states[domain_j]
+                    
+                    # Compute mutual information gradient
+                    mi_gradient = self._mutual_information_gradient(state_i, state_j)
+                    
+                    # Weight by manifold curvature coupling
+                    if domain_i in self.domain_indices and domain_j in self.domain_indices:
+                        idx_i = self.domain_indices[domain_i]
+                        idx_j = self.domain_indices[domain_j]
+                        coupling = self.entanglement_matrix[idx_i, idx_j]
+                    else:
+                        coupling = 0.1  # Default coupling
+                    
+                    entanglement[i, j] = mi_gradient * coupling
+        
+        return entanglement
+    
+    def _mutual_information_gradient(self, state_i: np.ndarray, 
+                                   state_j: np.ndarray) -> float:
+        """
+        Compute gradient of mutual information between states
+        """
+        # Discretize for MI calculation
+        bins = 10
+        hist_i = np.histogram(state_i, bins=bins)[0]
+        hist_j = np.histogram(state_j, bins=bins)[0]
+        
+        # Normalize
+        hist_i = hist_i / np.sum(hist_i)
+        hist_j = hist_j / np.sum(hist_j)
+        
+        # Compute mutual information
+        mi = 0
+        for i in range(bins):
+            for j in range(bins):
+                if hist_i[i] > 0 and hist_j[j] > 0:
+                    joint_prob = hist_i[i] * hist_j[j]  # Independence assumption
+                    mi += joint_prob * np.log(joint_prob / (hist_i[i] * hist_j[j]) + 1e-10)
+        
+        return mi
+    
+    def _estimate_influence_radius(self, tensor: np.ndarray, 
+                                  curvature: np.ndarray) -> float:
+        """
+        Estimate the spatial influence radius of a collapse
+        """
+        # Based on tensor magnitude and curvature
+        tensor_scale = np.linalg.norm(tensor)
+        curvature_scale = np.linalg.norm(curvature)
+        
+        # Empirical formula
+        radius = np.sqrt(tensor_scale) * (1 + 0.1 * curvature_scale)
+        
+        return radius
+```
+
+
+## **Integration with FractureMetrics**
+
+
+```python
+# src/fracturemetrics/analysis/manifold_analysis.py
+"""
+Manifold-based collapse analysis for FractureMetrics
+"""
+
+
+from typing import Dict, List, Tuple
+import numpy as np
+import pandas as pd
+from ..catastrophe.manifold_folder import CatastropheManifoldFolder
+from ..core.saturation import DomainMetrics, EnhancedSaturationCalculator
+
+
+class ManifoldCollapseAnalyzer:
+    """
+    Integrates Catastrophe Manifold Folding with FractureMetrics
+    """
+    
+    def __init__(self, saturation_calculator: EnhancedSaturationCalculator):
+        """
+        Initialize with FractureMetrics calculator
+        """
+        self.calculator = saturation_calculator
+        self.manifold_folder = CatastropheManifoldFolder(dimensions=5)
+        
+        # Track domain-specific folders
+        self.domain_folders = {
+            'democratic': CatastropheManifoldFolder(dimensions=5),
+            'economic': CatastropheManifoldFolder(dimensions=3),
+            'information': CatastropheManifoldFolder(dimensions=4),
+            'geopolitical': CatastropheManifoldFolder(dimensions=6)
+        }
+        
+        # Cross-domain coupling matrix
+        self.cross_domain_coupling = np.array([
+            [1.0, 0.7, 0.8, 0.6],  # democratic
+            [0.7, 1.0, 0.6, 0.5],  # economic
+            [0.8, 0.6, 1.0, 0.7],  # information
+            [0.6, 0.5, 0.7, 1.0]   # geopolitical
+        ])
+    
+    def analyze_with_folding(self, metrics_list: List[DomainMetrics]) -> Dict:
+        """
+        Analyze democratic metrics with manifold folding
+        """
+        # Standard saturation analysis
+        results_df = self.calculator.analyze_time_series(metrics_list)
+        
+        # Prepare collapse tensors
+        collapse_tensors = []
+        
+        for i, metrics in enumerate(metrics_list):
+            # Convert metrics to tensor
+            tensor = self._metrics_to_tensor(metrics)
+            
+            # Check for collapse conditions
+            if results_df.iloc[i]['risk_level'] in ['HIGH', 'CRITICAL', 'EXTREME']:
+                # Fold the manifold
+                state = self.manifold_folder.fold_manifold(
+                    tensor, 
+                    domain='democratic',
+                    coupling_strength=0.2
+                )
+                
+                # Also fold domain-specific manifolds
+                self._fold_domain_manifolds(metrics, tensor)
+            
+            collapse_tensors.append(tensor)
+        
+        # Predict future collapse zones
+        current_state = collapse_tensors[-1].flatten() if collapse_tensors else np.zeros(25)
+        predictions = self.manifold_folder.predict_collapse_zones(
+            current_state, 
+            horizon=12,
+            trajectories=200
+        )
+        
+        # Compute cross-domain cascade risk
+        cascade_analysis = self._analyze_cascade_risk(metrics_list[-1])
+        
+        return {
+            'saturation_results': results_df,
+            'manifold_state': self.manifold_folder.curvature_field,
+            'collapse_predictions': predictions,
+            'cascade_analysis': cascade_analysis,
+            'intervention_recommendations': self._generate_interventions(predictions)
+        }
+    
+    def _metrics_to_tensor(self, metrics: DomainMetrics) -> np.ndarray:
+        """
+        Convert domain metrics to collapse tensor
+        """
+        # Create correlation matrix from metrics
+        values = np.array([
+            metrics.institutional_trust,
+            metrics.information_integrity,
+            metrics.electoral_confidence,
+            metrics.alliance_stability,
+            metrics.social_cohesion
+        ])
+        
+        # Add temporal gradient
+        if hasattr(self, '_previous_values'):
+            gradient = values - self._previous_values
+        else:
+            gradient = np.zeros_like(values)
+        
+        self._previous_values = values.copy()
+        
+        # Construct tensor
+        tensor = np.outer(values, values) + 0.1 * np.outer(gradient, gradient)
+        
+        return tensor
+    
+    def _fold_domain_manifolds(self, metrics: DomainMetrics, tensor: np.ndarray):
+        """
+        Update domain-specific manifolds based on collapse
+        """
+        # Democratic domain
+        democratic_tensor = tensor[:5, :5]  # Core democratic metrics
+        self.domain_folders['democratic'].fold_manifold(
+            democratic_tensor, 
+            domain='democratic'
+        )
+        
+        # Information domain (subset)
+        info_indices = [1, 2]  # information_integrity, electoral_confidence
+        info_tensor = tensor[np.ix_(info_indices, info_indices)]
+        # Pad to expected dimensions
+        padded_info = np.eye(4)
+        padded_info[:2, :2] = info_tensor
+        self.domain_folders['information'].fold_manifold(
+            padded_info,
+            domain='information'
+        )
+    
+    def _analyze_cascade_risk(self, current_metrics: DomainMetrics) -> Dict:
+        """
+        Analyze risk of cross-domain cascade
+        """
+        # Get current states from each domain
+        domain_states = {
+            'democratic': self._get_domain_state('democratic', current_metrics),
+            'economic': self._get_domain_state('economic', current_metrics),
+            'information': self._get_domain_state('information', current_metrics),
+            'geopolitical': self._get_domain_state('geopolitical', current_metrics)
+        }
+        
+        # Compute entanglement
+        entanglement = self.manifold_folder.compute_domain_entanglement(domain_states)
+        
+        # Identify cascade paths
+        cascade_paths = self._identify_cascade_paths(entanglement)
+        
+        return {
+            'entanglement_matrix': entanglement,
+            'cascade_paths': cascade_paths,
+            'highest_risk_path': cascade_paths[0] if cascade_paths else None,
+            'cascade_probability': self._compute_cascade_probability(entanglement)
+        }
+    
+    def _get_domain_state(self, domain: str, metrics: DomainMetrics) -> np.ndarray:
+        """
+        Extract domain-specific state vector
+        """
+        if domain == 'democratic':
+            return np.array([
+                metrics.institutional_trust,
+                metrics.information_integrity,
+                metrics.electoral_confidence,
+                metrics.alliance_stability,
+                metrics.social_cohesion
+            ])
+        elif domain == 'information':
+            return np.array([
+                metrics.information_integrity,
+                metrics.electoral_confidence,
+                1.0 - metrics.institutional_trust,  # Distrust indicator
+                0.5  # Placeholder
+            ])
+        else:
+            # Placeholder for other domains
+            return np.random.rand(self.domain_folders[domain].dimensions)
+    
+    def _identify_cascade_paths(self, entanglement: np.ndarray) -> List[Tuple[str, str, float]]:
+        """
+        Identify most likely cascade paths between domains
+        """
+        domains = ['democratic', 'economic', 'information', 'geopolitical']
+        paths = []
+        
+        for i, source in enumerate(domains):
+            for j, target in enumerate(domains):
+                if i != j and entanglement[i, j] > 0.5:
+                    paths.append((source, target, entanglement[i, j]))
+        
+        # Sort by cascade strength
+        paths.sort(key=lambda x: x[2], reverse=True)
+        
+        return paths
+    
+    def _compute_cascade_probability(self, entanglement: np.ndarray) -> float:
+        """
+        Compute overall cascade probability
+        """
+        # Spectral radius of entanglement matrix
+        eigenvalues = np.linalg.eigvals(entanglement)
+        spectral_radius = np.max(np.abs

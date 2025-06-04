@@ -1,0 +1,1 @@
+# placeholder: collapse_topology.py with Ricci integration

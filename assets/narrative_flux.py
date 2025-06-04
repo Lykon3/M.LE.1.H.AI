@@ -1,0 +1,1 @@
+# placeholder: narrative_flux.py with entanglement matrix + spectral gap
